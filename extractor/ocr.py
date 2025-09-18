@@ -1,4 +1,4 @@
-# extractor/ocr.py (Updated Version)
+# extractor/ocr.py
 
 import pytesseract
 from PIL import Image
@@ -8,38 +8,31 @@ import platform
 
 logger = logging.getLogger(__name__)
 
-# --- NEW SECTION START ---
+# --- Tesseract Command Path Configuration ---
 # If you are still getting errors after installing Tesseract,
 # tell the script EXACTLY where to find the executable file.
 
 # 1. Find the path to your Tesseract installation.
 # 2. Uncomment the line for your operating system and paste the path.
+#    Make sure the path string starts with an 'r' (e.g., r"C:\...")
 
 # Example for Windows:
 # tesseract_cmd_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # Example for macOS (if installed with Homebrew on Apple Silicon):
- tesseract_cmd_path = r"/opt/homebrew/bin/tesseract"
+# tesseract_cmd_path = r"/opt/homebrew/bin/tesseract"
 
 # Example for Linux:
 # tesseract_cmd_path = r"/usr/bin/tesseract"
 
-# Set the command path if it's defined
+# This block checks if you've defined the path and sets it for pytesseract
 if 'tesseract_cmd_path' in locals():
     pytesseract.pytesseract.tesseract_cmd = tesseract_cmd_path
-# --- NEW SECTION END ---
 
 
 def ocr_pdf(file_path: str) -> str:
     """
-    Performs OCR on each page of a PDF file. This is used for
-    scanned documents where text extraction is not possible.
-
-    Args:
-        file_path: The local path to the scanned PDF file.
-
-    Returns:
-        The OCR-extracted text from the PDF as a single string.
+    Performs OCR on each page of a PDF file.
     """
     text = ""
     try:
@@ -47,7 +40,6 @@ def ocr_pdf(file_path: str) -> str:
             for i, page in enumerate(pdf.pages):
                 img = page.to_image(resolution=300).original
                 
-                # Use Tesseract to do OCR on the image
                 page_text = pytesseract.image_to_string(img, lang='eng')
                 if page_text:
                     text += page_text + "\n--- PAGE BREAK ---\n"
