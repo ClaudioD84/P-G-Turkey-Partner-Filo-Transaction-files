@@ -1,4 +1,4 @@
-# app.py (Final Version with Specific File Matching)
+# app.py (Final Version with Whitespace Trimming)
 
 import streamlit as st
 import pandas as pd
@@ -20,17 +20,21 @@ logger = logging.getLogger(__name__)
 def find_matching_transaction_file(pdf_filename: str, transaction_files: list):
     """
     Finds the specific "INVOICE DETAILS" transaction file that corresponds
-    to a given PDF filename.
+    to a given PDF filename, ignoring leading/trailing whitespace.
     """
-    match = re.search(r'(PFS\d+)', pdf_filename)
+    # Trim whitespace from the PDF filename just in case
+    clean_pdf_filename = pdf_filename.strip()
+
+    match = re.search(r'(PFS\d+)', clean_pdf_filename)
     if not match:
         return None
     
     pdf_invoice_num = match.group(1)
     
     for file in transaction_files:
-        # We now ensure we are only getting the main details file.
-        if pdf_invoice_num in file.name and "INVOICE DETAILS" in file.name.upper():
+        # Trim whitespace from the transaction filename and compare
+        clean_tran_filename = file.name.strip()
+        if pdf_invoice_num in clean_tran_filename and "INVOICE DETAILS" in clean_tran_filename.upper():
             return file
     return None
 
@@ -82,15 +86,15 @@ def main():
 
                 for i, pdf_file in enumerate(invoice_pdfs):
                     log = st.session_state.processing_log
-                    log.append(f"--- Processing: {pdf_file.name} ---")
+                    log.append(f"--- Processing: {pdf_file.name.strip()} ---")
 
                     matching_tran_file = find_matching_transaction_file(pdf_file.name, transaction_files)
                     
                     if not matching_tran_file:
-                        log.append(f"⚠️ WARNING: No 'INVOICE DETAILS' file found for {pdf_file.name}. Skipping.")
+                        log.append(f"⚠️ WARNING: No 'INVOICE DETAILS' file found for {pdf_file.name.strip()}. Skipping.")
                         continue
                     
-                    log.append(f"✅ Matched with transaction file: {matching_tran_file.name}")
+                    log.append(f"✅ Matched with transaction file: {matching_tran_file.name.strip()}")
 
                     try:
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -108,13 +112,13 @@ def main():
                         log.append("Processing transaction details...")
                         final_df = process_transactions(matching_tran_file, summary_data, text)
                         
-                        output_filename = f"Final_Report_{os.path.splitext(pdf_file.name)[0]}.xlsx"
+                        output_filename = f"Final_Report_{os.path.splitext(pdf_file.name.strip())[0]}.xlsx"
                         excel_bytes = create_final_report(final_df)
                         st.session_state.output_files[output_filename] = excel_bytes
                         log.append(f"✅ Successfully generated report: {output_filename}")
 
                     except Exception as e:
-                        logger.error(f"Failed to process {pdf_file.name}: {e}", exc_info=True)
+                        logger.error(f"Failed to process {pdf_file.name.strip()}: {e}", exc_info=True)
                         log.append(f"❌ ERROR: {e}")
                     finally:
                         if 'pdf_path' in locals() and os.path.exists(pdf_path):
