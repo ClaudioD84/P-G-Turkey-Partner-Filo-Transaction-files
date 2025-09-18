@@ -1,28 +1,27 @@
-import streamlit as st
+# extractor/llm_client.py (Updated Version)
+
 import openai
 import json
 import logging
 
 logger = logging.getLogger(__name__)
 
-def extract_with_llm(text: str) -> dict:
+def extract_with_llm(text: str, api_key: str) -> dict:
     """
     Uses an LLM to extract structured data from invoice text.
 
     Args:
         text: The text from which to extract data.
+        api_key: The user-provided OpenAI API key.
 
     Returns:
         A dictionary of the extracted data.
     """
-    try:
-        openai.api_key = st.secrets["openai_api_key"]
-    except (KeyError, FileNotFoundError):
-        raise ValueError("OpenAI API key not found. Please configure .streamlit/secrets.toml")
+    if not api_key:
+        raise ValueError("OpenAI API key not provided. Please enter it in the sidebar.")
+    
+    openai.api_key = api_key
 
-    # This prompt is designed for structured JSON output. It clearly defines the
-    # desired fields and provides examples of expected formats (e.g., YYYY-MM-DD).
-    # Requesting JSON helps in reliable parsing of the LLM's response.
     prompt = f"""
     You are an expert invoice data extraction assistant. Analyze the following invoice text
     and extract the specified fields. Return the result as a valid JSON object.
@@ -47,14 +46,17 @@ def extract_with_llm(text: str) -> dict:
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo-1106",  # A model that is good with JSON mode
+            model="gpt-3.5-turbo-1106",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.1, # Low temperature for factual extraction
+            temperature=0.1,
         )
         content = response.choices[0].message.content
         logger.info(f"LLM Raw Response: {content}")
         return json.loads(content)
     except Exception as e:
         logger.error(f"Error during LLM call: {e}")
+        # Check for authentication errors specifically
+        if "AuthenticationError" in str(type(e)):
+             raise RuntimeError("Invalid OpenAI API key provided. Please check your key and try again.")
         raise RuntimeError(f"Failed to communicate with the LLM: {e}")
