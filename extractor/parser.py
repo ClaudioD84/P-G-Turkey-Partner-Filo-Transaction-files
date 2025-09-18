@@ -1,61 +1,56 @@
-# extractor/parser.py (Final Version)
+# extractor/parser.py
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
-from dateutil import parser as dateparser # Using a more flexible date parser
+import pandas as pd
+import os
+from typing import Dict, IO
+from dateutil import parser as dateparser
 
-@dataclass
-class InvoiceData:
-    """Represents the final, structured data for one invoice."""
-    invoice_number: str
-    invoice_date: Optional[datetime]
-    plate: str
-    car_brand: str
-    product_code: str
-    net_amount: float
-    vat_rate: float
-    gross_amount: float
-
-def parse_invoice(llm_data: dict, full_pdf_text: str) -> InvoiceData:
+def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_text: str) -> pd.DataFrame:
     """
-    Parses the data extracted by the LLM, applies business logic,
-    and returns a structured InvoiceData object.
+    Reads a transaction file, enriches it with summary data from a PDF,
+    and formats it into the final report structure.
     """
-    net_amount_raw = llm_data.get("total_rent_net")
-    net_amount = float(net_amount_raw) if net_amount_raw is not None else 0.0
+    # Read the transaction file (CSV, XLS, or XLSX) into a DataFrame
+    file_extension = os.path.splitext(transaction_file.name)[1].lower()
+    if file_extension == '.csv':
+        df = pd.read_csv(transaction_file)
+    else:
+        df = pd.read_excel(transaction_file)
 
-    vat_percentage_raw = llm_data.get("vat_percentage")
-    vat_percentage = float(vat_percentage_raw) if vat_percentage_raw is not None else 20.0 # Default to 20%
-
-    vat_rate = vat_percentage / 100.0
-    gross_amount = round(net_amount * (1 + vat_rate), 2)
-
-    product_code = "Unknown"
-    if "LINE 1" in full_pdf_text:
-        product_code = "Leasing"
-    elif "LINE 2" in full_pdf_text:
-        product_code = "GEN. EXP"
+    # --- Data Cleaning and Column Mapping ---
+    # The column names can be inconsistent. We find them by keywords.
+    # This makes the script robust to small changes in the input files.
+    column_map = {
+        'PLAKA': [col for col in df.columns if 'PLATE' in col.upper()][0],
+        'RENTAL VEHICLE BRAND AND MODEL': [col for col in df.columns if 'BRAND' in col.upper()][0],
+        'toplam ft.tutari': [col for col in df.columns if 'RENT' in col.upper() and 'TOTAL' in col.upper()][0]
+    }
     
-    # --- MODIFIED SECTION START ---
-    # Use a more flexible date parser to handle various formats
-    date_str = llm_data.get("invoice_date")
-    invoice_date_obj = None
-    if date_str:
-        try:
-            # dateutil.parser can intelligently handle most date formats
-            invoice_date_obj = dateparser.parse(date_str)
-        except (ValueError, TypeError):
-            invoice_date_obj = None
-    # --- MODIFIED SECTION END ---
+    # Select and rename columns to match the target format
+    df = df[list(column_map.values())].rename(columns={v: k for k, v in column_map.items()})
 
-    return InvoiceData(
-        invoice_number=llm_data.get("invoice_number", "N/A"),
-        invoice_date=invoice_date_obj,
-        plate=llm_data.get("plate", "N/A"),
-        car_brand=llm_data.get("car_brand", "N/A"),
-        net_amount=net_amount,
-        vat_rate=vat_rate,
-        gross_amount=gross_amount,
-        product_code=product_code,
-    )
+    # --- Data Enrichment from PDF ---
+    # Get VAT rate and Invoice Date from the summary data extracted by the LLM
+    vat_raw = summary_data.get('vat_percentage')
+    vat_rate = (float(vat_raw) / 100.0) if vat_raw is not None else 0.20 # Default to 20%
+
+    date_str = summary_data.get('invoice_date')
+    invoice_date = dateparser.parse(date_str).strftime('%d.%m.%Y') if date_str else None
+
+    # Get description/product code from the PDF text
+    description = "leasing" if "LINE 1" in pdf_text else "GEN.EXP"
+
+    # Add new columns
+    df['GROSS'] = df['toplam ft.tutari'] * (1 + vat_rate)
+    df['DATE'] = invoice_date
+    df['DESCTRIPTION'] = description
+    df['INVOICE'] = summary_data.get('invoice_number')
+
+    # Ensure correct column order
+    final_columns = [
+        'PLAKA', 'RENTAL VEHICLE BRAND AND MODEL', 'toplam ft.tutari', 
+        'GROSS', 'DATE', 'DESCTRIPTION', 'INVOICE'
+    ]
+    df = df[final_columns]
+
+    return df
