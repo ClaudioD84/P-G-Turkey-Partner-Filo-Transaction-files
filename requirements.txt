@@ -1,11 +1,14 @@
+# requirements.txt
+
 # Core data handling and file operations
 pandas
 openpyxl
 xlsxwriter
+xlrd
 pdfplumber
 pytesseract
 Pillow
-PyYAML
+python-dateutil
 
 # Streamlit UI Framework
 streamlit
