@@ -1,43 +1,52 @@
-# extractor/parser.py
+# extractor/parser.py (New Robust Version)
 
 import pandas as pd
 import os
-from typing import Dict, IO
+from typing import Dict, IO, List, Optional
 from dateutil import parser as dateparser
+
+def find_column(columns: List[str], keywords: List[str]) -> Optional[str]:
+    """Helper function to find the first column name that contains any of the given keywords."""
+    for col in columns:
+        col_upper = str(col).upper()
+        if any(key in col_upper for key in keywords):
+            return col
+    return None
 
 def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_text: str) -> pd.DataFrame:
     """
     Reads a transaction file, enriches it with summary data from a PDF,
     and formats it into the final report structure.
     """
-    # Read the transaction file (CSV, XLS, or XLSX) into a DataFrame
     file_extension = os.path.splitext(transaction_file.name)[1].lower()
-    if file_extension == '.csv':
-        df = pd.read_csv(transaction_file)
-    else:
-        df = pd.read_excel(transaction_file)
+    df = pd.read_csv(transaction_file) if file_extension == '.csv' else pd.read_excel(transaction_file)
 
-    # --- Data Cleaning and Column Mapping ---
-    # The column names can be inconsistent. We find them by keywords.
-    # This makes the script robust to small changes in the input files.
-    column_map = {
-        'PLAKA': [col for col in df.columns if 'PLATE' in col.upper()][0],
-        'RENTAL VEHICLE BRAND AND MODEL': [col for col in df.columns if 'BRAND' in col.upper()][0],
-        'toplam ft.tutari': [col for col in df.columns if 'RENT' in col.upper() and 'TOTAL' in col.upper()][0]
-    }
-    
-    # Select and rename columns to match the target format
-    df = df[list(column_map.values())].rename(columns={v: k for k, v in column_map.items()})
+    # --- Robust Column Finding ---
+    # Find column names using a list of possible keywords.
+    plate_col = find_column(df.columns, ['PLATE', 'PLAKA'])
+    brand_col = find_column(df.columns, ['BRAND', 'MODEL'])
+    # The amount column has different names in different files ('TOTAL RENT' vs 'TOTAL AMOUNT')
+    amount_col = find_column(df.columns, ['TOTAL RENT', 'TOTAL AMOUNT'])
+
+    # Raise a clear error if essential columns are not found
+    if not all([plate_col, brand_col, amount_col]):
+        missing = [col for col, name in [('Plate', plate_col), ('Brand', brand_col), ('Amount', amount_col)] if not name]
+        raise ValueError(f"Could not find required columns in {transaction_file.name}: {', '.join(missing)}")
+
+    # Select and rename the columns we found
+    df = df[[plate_col, brand_col, amount_col]].rename(columns={
+        plate_col: 'PLAKA',
+        brand_col: 'RENTAL VEHICLE BRAND AND MODEL',
+        amount_col: 'toplam ft.tutari'
+    })
 
     # --- Data Enrichment from PDF ---
-    # Get VAT rate and Invoice Date from the summary data extracted by the LLM
     vat_raw = summary_data.get('vat_percentage')
-    vat_rate = (float(vat_raw) / 100.0) if vat_raw is not None else 0.20 # Default to 20%
+    vat_rate = (float(vat_raw) / 100.0) if vat_raw is not None else 0.20 # Default
 
     date_str = summary_data.get('invoice_date')
     invoice_date = dateparser.parse(date_str).strftime('%d.%m.%Y') if date_str else None
 
-    # Get description/product code from the PDF text
     description = "leasing" if "LINE 1" in pdf_text else "GEN.EXP"
 
     # Add new columns
@@ -48,7 +57,7 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
 
     # Ensure correct column order
     final_columns = [
-        'PLAKA', 'RENTAL VEHICLE BRAND AND MODEL', 'toplam ft.tutari', 
+        'PLAKA', 'RENTAL VEHICLE BRAND AND MODEL', 'toplam ft.tutari',
         'GROSS', 'DATE', 'DESCTRIPTION', 'INVOICE'
     ]
     df = df[final_columns]
