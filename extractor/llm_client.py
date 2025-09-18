@@ -1,4 +1,4 @@
-# extractor/llm_client.py (Improved AI Prompt)
+# extractor/llm_client.py (Final, High-Accuracy Version)
 
 import openai
 import json
@@ -8,51 +8,64 @@ logger = logging.getLogger(__name__)
 
 def extract_with_llm(text: str, api_key: str) -> dict:
     """
-    Uses an LLM to extract structured data from invoice text.
-    The prompt is optimized to handle messy OCR output.
+    Uses a powerful LLM with a highly specific prompt to extract data
+    from messy OCR text of Turkish invoices.
     """
     if not api_key:
         raise ValueError("OpenAI API key not provided. Please enter it in the sidebar.")
     
     openai.api_key = api_key
 
-    # --- NEW, MORE ROBUST PROMPT ---
+    # --- NEW "SUPER-PROMPT" TAILORED FOR TURKISH INVOICES ---
     prompt = f"""
-    You are an expert financial data extraction assistant. The following text is from an invoice,
-    processed by Optical Character Recognition (OCR), so it may contain formatting errors or typos.
-    Your task is to analyze the text and extract the key fields as a valid JSON object.
+    You are a world-class data extraction expert specializing in Turkish financial documents.
+    The following text is from a scanned invoice from "PARTNER FİLO ÇÖZÜMLERİ A.Ş." that has been processed by OCR. The text is very messy and contains many errors.
+    Your task is to meticulously analyze the text to find and extract the key values into a perfect JSON object.
 
-    Key Instructions:
-    1.  **Invoice Number**: Look for terms like 'FATURA NO', 'Invoice No', 'ETTN', or a unique identifier.
-    2.  **Invoice Date**: Find a date, often near the invoice number. Format it as YYYY-MM-DD.
-    3.  **Plate**: Find a vehicle license plate, it will be a string with letters and numbers (e.g., '34-KVN-771').
-    4.  **Total Net Amount**: Critically important. Look for a final total before tax. Search for keywords like 'TOPLAM', 'Total', 'Net Amount', 'TUTARI'. This MUST be a number.
-    5.  **VAT Percentage**: Look for a tax rate like '20%', '10%', 'KDV'. Extract only the number.
+    **CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:**
 
-    If a field is not found or you are unsure, the value MUST be null.
+    1.  **Find the Grand Total (Net Amount)**: This is the most important value.
+        * Look for a summary table near the end of the document.
+        * Search for Turkish keywords like **"ARA TOPLAM"** (Subtotal), **"TOPLAM"** (Total), or **"GENEL TOPLAM"** (Grand Total).
+        * The value will be a number like **"3.450.961,18"**. You MUST parse this as **3450961.18**. Ignore the dots and use the comma as the decimal point. This is the **`total_rent_net`**.
 
-    --- OCR TEXT ---
-    {text[:4000]}
+    2.  **Find the VAT (KDV)**:
+        * Look for the term **"HESAPLANAN KDV %20"** or a similar percentage.
+        * The value next to it is the VAT amount. You need to extract the **percentage** itself (e.g., 20). This is the **`vat_percentage`**.
+
+    3.  **Find the Invoice Number**:
+        * Look for a unique ID, often labeled **"ETTN"**. It's a long alphanumeric string with dashes. Example: "C66DD4EC-3810-4803-8228-74178859FBA4". This is the **`invoice_number`**.
+        * If ETTN is not clear, look for "FATURA NO".
+
+    4.  **Find the Plate Number**:
+        * The invoices list many vehicles. Do not extract a plate number, as there is no single one. Return **null** for the **`plate`** and **`car_brand`** fields.
+
+    5.  **Return JSON**: Your output MUST be a valid JSON object. If you cannot find a value, you MUST return `null`, not an empty string.
+
+    **EXAMPLE OF ANALYSIS:**
+    If you see text like:
+    `ARA TOPLAM 3.450.961,18`
+    `HESAPLANAN KDV %20 690.192,24`
+    `GENEL TOPLAM 4.141.153,42`
+    
+    Your JSON output should contain:
+    `"total_rent_net": 3450961.18,`
+    `"vat_percentage": 20.0,`
+
+    --- OCR TEXT TO ANALYZE ---
+    {text[:8000]}
     --- END TEXT ---
 
-    JSON Output:
-    {{
-      "invoice_number": "...",
-      "invoice_date": "YYYY-MM-DD",
-      "plate": "...",
-      "car_brand": "...",
-      "total_rent_net": <number_or_null>,
-      "vat_percentage": <number_or_null>,
-      "confidence": <your_confidence_from_0.0_to_1.0>
-    }}
+    Please provide the final JSON output.
     """
 
     try:
+        # Switch to a more powerful model for better accuracy on difficult documents
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo-1106",
+            model="gpt-4o", 
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.0, # Set to 0 for maximum fact-based extraction
+            temperature=0.0,
         )
         content = response.choices[0].message.content
         logger.info(f"LLM Raw Response: {content}")
