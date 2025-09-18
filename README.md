@@ -1,28 +1,27 @@
-# Invoice Processing Tool
+# Invoice Processing Streamlit App
 
-This tool automates the extraction of data from PDF invoices, cross-references it with a transaction file, and generates structured Excel reports.
+This tool provides a web interface to automate the extraction of data from PDF invoices, cross-reference it with a transaction file, and generate structured Excel reports.
 
 ## Features
 
-- Extracts data from text-based and scanned PDF invoices.
-- Uses a Large Language Model (LLM) for intelligent data extraction.
-- Cross-references invoice data with a transaction CSV file.
-- Generates one formatted Excel file per invoice.
-- Supports both Dropbox and local file system as input sources.
-- Logs extraction details and potential discrepancies.
+-   **Web-Based UI**: Easy-to-use interface powered by Streamlit for uploading files.
+-   **Intelligent Extraction**: Extracts data from both text-based and scanned PDF invoices using OCR and a Large Language Model (LLM).
+-   **Data Validation**: Cross-references invoice data with a transaction CSV file.
+-   **Formatted Output**: Generates one downloadable Excel file per invoice, matching a predefined template.
+-   **Secure**: Uses Streamlit's secrets management for API keys.
 
 ## Installation
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/your-username/invoice-processing-tool.git](https://github.com/your-username/invoice-processing-tool.git)
-    cd invoice-processing-tool
+    git clone <your-repo-url>
+    cd invoice-processing-streamlit
     ```
 
 2.  **Create and activate a virtual environment:**
     ```bash
     python3 -m venv venv
-    source venv/bin/activate
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
 3.  **Install the required dependencies:**
@@ -31,17 +30,15 @@ This tool automates the extraction of data from PDF invoices, cross-references i
     ```
 
 4.  **Set up Tesseract OCR:**
-    Follow the installation instructions for your operating system from the [official Tesseract documentation](https.org/docs/).
+    This is required for processing scanned (image-based) PDFs. Follow the installation instructions for your OS from the [official Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/Installation.html).
 
-5.  **Configure the application:**
-    -   Rename `config.example.yml` to `config.yml`.
-    -   Fill in your Dropbox API key, OpenAI API key, and other settings.
+5.  **Configure API Keys:**
+    -   Create a file at `.streamlit/secrets.toml`.
+    -   Add your API keys to this file. See `.streamlit/secrets.toml.example` for the required format.
 
-## Usage
+## How to Run
 
-The tool can be run from the command line with either a Dropbox folder path or a local directory path.
-
-### Running with a Dropbox Folder
+Launch the Streamlit application from your terminal:
 
 ```bash
-python run.py --source dropbox:/path/to/your/folder
+streamlit run app.py
