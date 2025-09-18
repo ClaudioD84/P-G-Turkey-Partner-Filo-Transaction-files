@@ -1,11 +1,34 @@
-# extractor/ocr.py
+# extractor/ocr.py (Updated Version)
 
 import pytesseract
 from PIL import Image
 import pdfplumber
 import logging
+import platform
 
 logger = logging.getLogger(__name__)
+
+# --- NEW SECTION START ---
+# If you are still getting errors after installing Tesseract,
+# tell the script EXACTLY where to find the executable file.
+
+# 1. Find the path to your Tesseract installation.
+# 2. Uncomment the line for your operating system and paste the path.
+
+# Example for Windows:
+# tesseract_cmd_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# Example for macOS (if installed with Homebrew on Apple Silicon):
+ tesseract_cmd_path = r"/opt/homebrew/bin/tesseract"
+
+# Example for Linux:
+# tesseract_cmd_path = r"/usr/bin/tesseract"
+
+# Set the command path if it's defined
+if 'tesseract_cmd_path' in locals():
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd_path
+# --- NEW SECTION END ---
+
 
 def ocr_pdf(file_path: str) -> str:
     """
@@ -22,17 +45,17 @@ def ocr_pdf(file_path: str) -> str:
     try:
         with pdfplumber.open(file_path) as pdf:
             for i, page in enumerate(pdf.pages):
-                # Convert PDF page to a high-resolution image
                 img = page.to_image(resolution=300).original
                 
                 # Use Tesseract to do OCR on the image
-                page_text = pytesseract.image_to_string(img, lang='eng') # Specify language if known
+                page_text = pytesseract.image_to_string(img, lang='eng')
                 if page_text:
                     text += page_text + "\n--- PAGE BREAK ---\n"
         logger.info(f"Successfully performed OCR on {file_path}")
         return text
+    except pytesseract.TesseractNotFoundError as e:
+        logger.error(f"Tesseract not found: {e}")
+        raise RuntimeError("Tesseract is not installed or it's not in your PATH. See README file for more information.")
     except Exception as e:
         logger.error(f"OCR failed for file {file_path}: {e}")
-        # Depending on the error, you might need to check if Tesseract is installed
-        # and available in the system's PATH.
-        raise RuntimeError(f"OCR processing failed. Ensure Tesseract is correctly installed. Error: {e}")
+        raise RuntimeError(f"OCR processing failed. Error: {e}")
