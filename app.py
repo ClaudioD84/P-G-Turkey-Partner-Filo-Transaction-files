@@ -1,15 +1,12 @@
-# app.py (New Refactored Version)
+# app.py (Final Version with Specific File Matching)
 
 import streamlit as st
 import pandas as pd
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, IO
 import tempfile
 import os
 import logging
 import re
 
-# Import project modules
 from extractor.pdf_reader import read_pdf
 from extractor.ocr import ocr_pdf
 from extractor.llm_client import extract_summary_data
@@ -19,9 +16,12 @@ from extractor.excel_writer import create_final_report
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def find_matching_transaction_file(pdf_filename: str, transaction_files: List[IO[bytes]]) -> Optional[IO[bytes]]:
-    """Finds the transaction file that corresponds to a given PDF filename."""
-    # Extract the core invoice number like "PFS2025000001235" from the PDF filename
+# --- MODIFIED FUNCTION ---
+def find_matching_transaction_file(pdf_filename: str, transaction_files: list):
+    """
+    Finds the specific "INVOICE DETAILS" transaction file that corresponds
+    to a given PDF filename.
+    """
     match = re.search(r'(PFS\d+)', pdf_filename)
     if not match:
         return None
@@ -29,7 +29,8 @@ def find_matching_transaction_file(pdf_filename: str, transaction_files: List[IO
     pdf_invoice_num = match.group(1)
     
     for file in transaction_files:
-        if pdf_invoice_num in file.name:
+        # We now ensure we are only getting the main details file.
+        if pdf_invoice_num in file.name and "INVOICE DETAILS" in file.name.upper():
             return file
     return None
 
@@ -37,7 +38,7 @@ def main():
     """Defines the Streamlit UI and orchestrates the app flow."""
     st.set_page_config(page_title="Invoice Processor", layout="wide")
     st.title("🧾 Invoice and Transaction Processor")
-    st.markdown("Upload invoice PDFs and their corresponding detailed transaction files (e.g., 'Upload file PFS...'). The tool will combine them into a final report.")
+    st.markdown("Upload invoice PDFs and their corresponding 'INVOICE DETAILS' transaction files. The tool will combine them into a final report.")
 
     if 'output_files' not in st.session_state:
         st.session_state.output_files = {}
@@ -49,12 +50,11 @@ def main():
         api_key_input = st.text_input(
             "Enter your OpenAI API Key", type="password", help="Required for PDF data extraction."
         )
-
         st.header("Instructions")
         st.markdown("""
         1.  **Enter API Key**.
         2.  **Upload Invoice PDFs**.
-        3.  **Upload Transaction Files**: These are the 'Upload file PFS...' Excel/CSV files.
+        3.  **Upload Transaction Files**: These are the 'Upload file PFS... - INVOICE DETAILS' files.
         4.  **Process**: Click the button to start.
         5.  **Download**: Links for the final reports will appear below.
         """)
@@ -84,11 +84,10 @@ def main():
                     log = st.session_state.processing_log
                     log.append(f"--- Processing: {pdf_file.name} ---")
 
-                    # Find the matching transaction file
                     matching_tran_file = find_matching_transaction_file(pdf_file.name, transaction_files)
                     
                     if not matching_tran_file:
-                        log.append(f"⚠️ WARNING: No matching transaction file found for {pdf_file.name}. Skipping.")
+                        log.append(f"⚠️ WARNING: No 'INVOICE DETAILS' file found for {pdf_file.name}. Skipping.")
                         continue
                     
                     log.append(f"✅ Matched with transaction file: {matching_tran_file.name}")
@@ -98,21 +97,17 @@ def main():
                             tmp.write(pdf_file.getvalue())
                             pdf_path = tmp.name
 
-                        # 1. Extract summary data from PDF
                         log.append("Reading PDF and performing OCR...")
                         text = read_pdf(pdf_path) or ocr_pdf(pdf_path)
-                        if not text:
-                            raise ValueError("Could not extract any text from the PDF.")
+                        if not text: raise ValueError("Could not extract text from PDF.")
                         
                         log.append("Extracting summary data with AI...")
                         summary_data = extract_summary_data(text, api_key_input)
                         log.append(f" extracted: Date={summary_data.get('invoice_date')}, VAT={summary_data.get('vat_percentage')}%")
 
-                        # 2. Process the transaction file with the summary data
                         log.append("Processing transaction details...")
                         final_df = process_transactions(matching_tran_file, summary_data, text)
                         
-                        # 3. Generate the final Excel report
                         output_filename = f"Final_Report_{os.path.splitext(pdf_file.name)[0]}.xlsx"
                         excel_bytes = create_final_report(final_df)
                         st.session_state.output_files[output_filename] = excel_bytes
