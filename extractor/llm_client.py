@@ -1,4 +1,4 @@
-# extractor/llm_client.py
+# extractor/llm_client.py (Final VAT Fix)
 
 import openai
 import json
@@ -16,9 +16,9 @@ def extract_summary_data(text: str, api_key: str) -> dict:
     You are a data extraction specialist. From the provided OCR text of a Turkish invoice,
     extract ONLY the following three fields and return them in a JSON object.
 
-    1.  **invoice_number**: Find the number that looks like "PFS...". For example, "PFS2025000001235".
-    2.  **invoice_date**: Find the date, usually labeled "Tarih". It will be in DD.MM.YYYY format. Reformat it to YYYY-MM-DD.
-    3.  **vat_percentage**: Find the main VAT rate, usually labeled "HESAPLANAN KDV". Extract the number (e.g., 20 or 10).
+    1.  **invoice_number**: Find the number like "PFS...". For example, "PFS2025000001235".
+    2.  **invoice_date**: Find the date labeled "Tarih". It will be in DD.MM.YYYY format. Reformat it to YYYY-MM-DD.
+    3.  **vat_percentage**: Find the VAT rate. Look for text like **"HESAPLANAN KDV %20"** or **"KDV %10"**. Extract the number (20 or 10). It is very important to find this value.
 
     --- OCR TEXT ---
     {text[:4000]}
