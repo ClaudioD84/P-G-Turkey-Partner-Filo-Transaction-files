@@ -1,3 +1,5 @@
+# extractor/parser.py (Updated Version)
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -18,38 +20,31 @@ def parse_invoice(llm_data: dict, full_pdf_text: str) -> InvoiceData:
     """
     Parses the data extracted by the LLM, applies business logic,
     and returns a structured InvoiceData object.
-
-    Args:
-        llm_data: The JSON data extracted by the LLM.
-        full_pdf_text: The complete text from the PDF for rule-based checks.
-
-    Returns:
-        An InvoiceData object.
     """
-    # Extract values with fallbacks
-    net_amount = float(llm_data.get("total_rent_net", 0.0))
-    vat_percentage = float(llm_data.get("vat_percentage", 20.0)) # Default to 20% if not found
-    vat_rate = vat_percentage / 100.0
+    # --- MODIFIED SECTION START ---
+    # Robustly handle potential None values from the LLM before converting to float.
+    net_amount_raw = llm_data.get("total_rent_net")
+    net_amount = float(net_amount_raw) if net_amount_raw is not None else 0.0
 
-    # Calculate gross amount
+    vat_percentage_raw = llm_data.get("vat_percentage")
+    vat_percentage = float(vat_percentage_raw) if vat_percentage_raw is not None else 20.0 # Default to 20%
+    # --- MODIFIED SECTION END ---
+
+    vat_rate = vat_percentage / 100.0
     gross_amount = round(net_amount * (1 + vat_rate), 2)
 
-    # Business Logic: Determine product_code based on last page content
-    # This logic is specific and fragile; an LLM could also infer this.
     product_code = "Unknown"
-    if "LINE 1" in full_pdf_text: # A more robust check might involve analyzing the last 500 chars
+    if "LINE 1" in full_pdf_text:
         product_code = "Leasing"
     elif "LINE 2" in full_pdf_text:
         product_code = "GEN. EXP"
     
-    # Parse date
     date_str = llm_data.get("invoice_date")
     invoice_date_obj = None
     if date_str:
         try:
             invoice_date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            # Add fallback parsing if needed
+        except (ValueError, TypeError):
             invoice_date_obj = None
 
     return InvoiceData(
