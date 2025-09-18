@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # tesseract_cmd_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # Example for macOS (if installed with Homebrew on Apple Silicon):
-# tesseract_cmd_path = r"/opt/homebrew/bin/tesseract"
+tesseract_cmd_path = r"/opt/homebrew/bin/tesseract"
 
 # Example for Linux:
 # tesseract_cmd_path = r"/usr/bin/tesseract"
