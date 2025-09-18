@@ -1,4 +1,4 @@
-# extractor/llm_client.py (Final, High-Accuracy Version)
+# extractor/llm_client.py (Final Version)
 
 import openai
 import json
@@ -16,41 +16,34 @@ def extract_with_llm(text: str, api_key: str) -> dict:
     
     openai.api_key = api_key
 
-    # --- NEW "SUPER-PROMPT" TAILORED FOR TURKISH INVOICES ---
+    # --- FINAL PROMPT WITH ENHANCED DATE & VAT INSTRUCTIONS ---
     prompt = f"""
-    You are a world-class data extraction expert specializing in Turkish financial documents.
-    The following text is from a scanned invoice from "PARTNER FİLO ÇÖZÜMLERİ A.Ş." that has been processed by OCR. The text is very messy and contains many errors.
-    Your task is to meticulously analyze the text to find and extract the key values into a perfect JSON object.
+    You are an expert financial data extraction assistant for Turkish invoices from "PARTNER FİLO ÇÖZÜMLERİ A.Ş.".
+    The following text is from a scanned invoice processed by OCR and is very messy.
+    Your task is to analyze the text and extract the key fields into a perfect JSON object.
 
     **CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:**
 
-    1.  **Find the Grand Total (Net Amount)**: This is the most important value.
-        * Look for a summary table near the end of the document.
-        * Search for Turkish keywords like **"ARA TOPLAM"** (Subtotal), **"TOPLAM"** (Total), or **"GENEL TOPLAM"** (Grand Total).
-        * The value will be a number like **"3.450.961,18"**. You MUST parse this as **3450961.18**. Ignore the dots and use the comma as the decimal point. This is the **`total_rent_net`**.
+    1.  **Invoice Date (Tarih)**:
+        * Find the date, which is usually on the first page. Look for the Turkish word **"Tarih"**.
+        * The format will likely be DD.MM.YYYY (e.g., 05.06.2025).
+        * You MUST reformat it to **YYYY-MM-DD** in your output. This is the **`invoice_date`**.
 
-    2.  **Find the VAT (KDV)**:
-        * Look for the term **"HESAPLANAN KDV %20"** or a similar percentage.
-        * The value next to it is the VAT amount. You need to extract the **percentage** itself (e.g., 20). This is the **`vat_percentage`**.
+    2.  **Invoice Number (ETTN)**:
+        * Find the **"ETTN"**. It's a long alphanumeric string with dashes. This is the **`invoice_number`**.
 
-    3.  **Find the Invoice Number**:
-        * Look for a unique ID, often labeled **"ETTN"**. It's a long alphanumeric string with dashes. Example: "C66DD4EC-3810-4803-8228-74178859FBA4". This is the **`invoice_number`**.
-        * If ETTN is not clear, look for "FATURA NO".
+    3.  **Grand Total (Net Amount)**:
+        * Look for a summary table near the end. Search for **"ARA TOPLAM"** (Subtotal) or **"TOPLAM"**.
+        * The value will be a number like **"3.450.961,18"**. You MUST parse this as **3450961.18** (ignore dots, use comma as decimal). This is the **`total_rent_net`**.
 
-    4.  **Find the Plate Number**:
-        * The invoices list many vehicles. Do not extract a plate number, as there is no single one. Return **null** for the **`plate`** and **`car_brand`** fields.
+    4.  **VAT Percentage (KDV)**:
+        * Look for **"HESAPLANAN KDV %20"** or a similar percentage.
+        * Extract the percentage number (e.g., 20 or 10). This is the **`vat_percentage`**.
 
-    5.  **Return JSON**: Your output MUST be a valid JSON object. If you cannot find a value, you MUST return `null`, not an empty string.
+    5.  **Plate Number**:
+        * The invoices list many vehicles. Return **null** for the **`plate`** and **`car_brand`** fields.
 
-    **EXAMPLE OF ANALYSIS:**
-    If you see text like:
-    `ARA TOPLAM 3.450.961,18`
-    `HESAPLANAN KDV %20 690.192,24`
-    `GENEL TOPLAM 4.141.153,42`
-    
-    Your JSON output should contain:
-    `"total_rent_net": 3450961.18,`
-    `"vat_percentage": 20.0,`
+    6.  **JSON Output**: If a value cannot be found, it MUST be `null`.
 
     --- OCR TEXT TO ANALYZE ---
     {text[:8000]}
@@ -60,7 +53,6 @@ def extract_with_llm(text: str, api_key: str) -> dict:
     """
 
     try:
-        # Switch to a more powerful model for better accuracy on difficult documents
         response = openai.chat.completions.create(
             model="gpt-4o", 
             messages=[{"role": "user", "content": prompt}],
