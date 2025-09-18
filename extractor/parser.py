@@ -1,4 +1,4 @@
-# extractor/parser.py (Final Version with Automatic Header Detection)
+# extractor/parser.py (Final Version with Data Cleaning)
 
 import pandas as pd
 import os
@@ -7,7 +7,7 @@ from dateutil import parser as dateparser
 
 def find_header_row(file: IO[bytes], keywords: List[str]) -> int:
     """Reads the first few lines of a file to find the correct header row number."""
-    df_preview = pd.read_excel(file, header=None, nrows=10) if file.name.endswith(('.xls', '.xlsx')) else pd.read_csv(file, header=None, nrows=10)
+    df_preview = pd.read_excel(file, header=None, nrows=10, engine='xlrd' if file.name.endswith('.xls') else 'openpyxl') if file.name.endswith(('.xls', '.xlsx')) else pd.read_csv(file, header=None, nrows=10)
     for index, row in df_preview.iterrows():
         row_str = ' '.join(str(x).upper() for x in row.dropna())
         if any(key.upper() in row_str for key in keywords):
@@ -28,14 +28,11 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
     Reads a transaction file, enriches it with summary data from a PDF,
     and formats it into the final report structure.
     """
-    # --- NEW: Automatically find the header row ---
     header_row_index = find_header_row(transaction_file, ['PLATE', 'PLAKA'])
     
-    # Read the file again, starting from the correct header
     file_extension = os.path.splitext(transaction_file.name)[1].lower()
-    df = pd.read_csv(transaction_file, header=header_row_index) if file_extension == '.csv' else pd.read_excel(transaction_file, header=header_row_index)
+    df = pd.read_csv(transaction_file, header=header_row_index) if file_extension == '.csv' else pd.read_excel(transaction_file, header=header_row_index, engine='xlrd' if file_extension == '.xls' else 'openpyxl')
 
-    # --- Robust Column Finding ---
     plate_col = find_column(df.columns, ['PLATE', 'PLAKA'])
     brand_col = find_column(df.columns, ['BRAND', 'MODEL'])
     amount_col = find_column(df.columns, ['TOTAL RENT', 'TOTAL AMOUNT'])
@@ -50,7 +47,13 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
         amount_col: 'toplam ft.tutari'
     })
 
-    # --- Data Enrichment & Calculation ---
+    # --- NEW DATA CLEANING STEP ---
+    # Drop any rows that are not valid vehicle entries (e.g., footer rows).
+    # A valid row must have a plate number.
+    df.dropna(subset=['PLAKA'], inplace=True)
+    df = df[df['PLAKA'].astype(str).str.strip() != '']
+    # --- END NEW STEP ---
+
     vat_raw = summary_data.get('vat_percentage')
     vat_rate = (float(vat_raw) / 100.0) if vat_raw is not None else 0.20
 
@@ -58,6 +61,9 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
     invoice_date = dateparser.parse(date_str).strftime('%d.%m.%Y') if date_str else None
 
     description = "leasing" if "LINE 1" in pdf_text else "GEN.EXP"
+
+    # Convert amount column to numeric, coercing errors to NaN, then fill with 0
+    df['toplam ft.tutari'] = pd.to_numeric(df['toplam ft.tutari'], errors='coerce').fillna(0)
 
     df['GROSS'] = df['toplam ft.tutari'] * (1 + vat_rate)
     df['DATE'] = invoice_date
