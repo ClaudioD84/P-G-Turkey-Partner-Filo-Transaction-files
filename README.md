@@ -32,9 +32,8 @@ This tool provides a web interface to automate the extraction of data from PDF i
 4.  **Set up Tesseract OCR:**
     This is required for processing scanned (image-based) PDFs. Follow the installation instructions for your OS from the [official Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/Installation.html).
 
-5.  **Configure API Keys:**
-    -   Create a file at `.streamlit/secrets.toml`.
-    -   Add your API keys to this file. See `.streamlit/secrets.toml.example` for the required format.
+5.  Run the App: Launch the application. You will be prompted to enter your OpenAI API key directly in the web interface.
+
 
 ## How to Run
 
