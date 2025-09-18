@@ -1,4 +1,4 @@
-# extractor/parser.py (Final Version with Data Cleaning)
+# extractor/parser.py (Final Version with Zero-Amount Filtering)
 
 import pandas as pd
 import os
@@ -7,12 +7,16 @@ from dateutil import parser as dateparser
 
 def find_header_row(file: IO[bytes], keywords: List[str]) -> int:
     """Reads the first few lines of a file to find the correct header row number."""
-    df_preview = pd.read_excel(file, header=None, nrows=10, engine='xlrd' if file.name.endswith('.xls') else 'openpyxl') if file.name.endswith(('.xls', '.xlsx')) else pd.read_csv(file, header=None, nrows=10)
+    # Use xlrd engine for .xls files, openpyxl for .xlsx
+    engine = 'xlrd' if file.name.endswith('.xls') else 'openpyxl'
+    df_preview = pd.read_excel(file, header=None, nrows=10, engine=engine) if file.name.endswith(('.xls', '.xlsx')) else pd.read_csv(file, header=None, nrows=10)
+    
     for index, row in df_preview.iterrows():
         row_str = ' '.join(str(x).upper() for x in row.dropna())
         if any(key.upper() in row_str for key in keywords):
             file.seek(0) # Reset file pointer after reading
             return index
+            
     file.seek(0) # Reset file pointer if nothing is found
     raise ValueError("Could not find a valid header row containing keywords like 'PLATE' or 'PLAKA'.")
 
@@ -31,7 +35,8 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
     header_row_index = find_header_row(transaction_file, ['PLATE', 'PLAKA'])
     
     file_extension = os.path.splitext(transaction_file.name)[1].lower()
-    df = pd.read_csv(transaction_file, header=header_row_index) if file_extension == '.csv' else pd.read_excel(transaction_file, header=header_row_index, engine='xlrd' if file_extension == '.xls' else 'openpyxl')
+    engine = 'xlrd' if file_extension == '.xls' else 'openpyxl'
+    df = pd.read_csv(transaction_file, header=header_row_index) if file_extension == '.csv' else pd.read_excel(transaction_file, header=header_row_index, engine=engine)
 
     plate_col = find_column(df.columns, ['PLATE', 'PLAKA'])
     brand_col = find_column(df.columns, ['BRAND', 'MODEL'])
@@ -47,13 +52,19 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
         amount_col: 'toplam ft.tutari'
     })
 
-    # --- NEW DATA CLEANING STEP ---
-    # Drop any rows that are not valid vehicle entries (e.g., footer rows).
-    # A valid row must have a plate number.
+    # --- Data Cleaning Steps ---
+    # 1. Drop footer rows that don't have a plate number.
     df.dropna(subset=['PLAKA'], inplace=True)
     df = df[df['PLAKA'].astype(str).str.strip() != '']
-    # --- END NEW STEP ---
+    
+    # 2. Convert amount column to a number, forcing errors to be empty.
+    df['toplam ft.tutari'] = pd.to_numeric(df['toplam ft.tutari'], errors='coerce').fillna(0)
+    
+    # 3. **NEW**: Filter out any rows where the amount is zero.
+    df = df[df['toplam ft.tutari'] > 0].copy()
+    # --- End Cleaning ---
 
+    # --- Data Enrichment & Calculation ---
     vat_raw = summary_data.get('vat_percentage')
     vat_rate = (float(vat_raw) / 100.0) if vat_raw is not None else 0.20
 
@@ -61,9 +72,6 @@ def process_transactions(transaction_file: IO[bytes], summary_data: Dict, pdf_te
     invoice_date = dateparser.parse(date_str).strftime('%d.%m.%Y') if date_str else None
 
     description = "leasing" if "LINE 1" in pdf_text else "GEN.EXP"
-
-    # Convert amount column to numeric, coercing errors to NaN, then fill with 0
-    df['toplam ft.tutari'] = pd.to_numeric(df['toplam ft.tutari'], errors='coerce').fillna(0)
 
     df['GROSS'] = df['toplam ft.tutari'] * (1 + vat_rate)
     df['DATE'] = invoice_date
