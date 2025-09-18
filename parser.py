@@ -34,7 +34,7 @@ def parse_pdf_invoice(file_content, filename):
             invoice_no_pattern = re.compile(r"Fatura No:\s*([A-Z0-9]+)")
             invoice_date_pattern = re.compile(r"Fatura Tarihi:\s*(\d{2}-\d{2}-\d{4})")
             net_amount_pattern = re.compile(r"Malzeme/Hizmet Toplam Tutan\s*([\d\.,]+)\s*TL")
-            vat_pattern = re.compile(r"Hesaplanan KDV\s*\(%(\d{1,2}),00\)")
+            vat_pattern = re.compile(r"KDV\s*\(%\s*(\d{1,2})\s*,\s*00\)")
             
             # --- Extract data ---
             invoice_no = invoice_no_pattern.search(full_text)
