@@ -1,8 +1,9 @@
-# extractor/parser.py (Updated Version)
+# extractor/parser.py (Final Version)
 
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from dateutil import parser as dateparser # Using a more flexible date parser
 
 @dataclass
 class InvoiceData:
@@ -21,14 +22,11 @@ def parse_invoice(llm_data: dict, full_pdf_text: str) -> InvoiceData:
     Parses the data extracted by the LLM, applies business logic,
     and returns a structured InvoiceData object.
     """
-    # --- MODIFIED SECTION START ---
-    # Robustly handle potential None values from the LLM before converting to float.
     net_amount_raw = llm_data.get("total_rent_net")
     net_amount = float(net_amount_raw) if net_amount_raw is not None else 0.0
 
     vat_percentage_raw = llm_data.get("vat_percentage")
     vat_percentage = float(vat_percentage_raw) if vat_percentage_raw is not None else 20.0 # Default to 20%
-    # --- MODIFIED SECTION END ---
 
     vat_rate = vat_percentage / 100.0
     gross_amount = round(net_amount * (1 + vat_rate), 2)
@@ -39,13 +37,17 @@ def parse_invoice(llm_data: dict, full_pdf_text: str) -> InvoiceData:
     elif "LINE 2" in full_pdf_text:
         product_code = "GEN. EXP"
     
+    # --- MODIFIED SECTION START ---
+    # Use a more flexible date parser to handle various formats
     date_str = llm_data.get("invoice_date")
     invoice_date_obj = None
     if date_str:
         try:
-            invoice_date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            # dateutil.parser can intelligently handle most date formats
+            invoice_date_obj = dateparser.parse(date_str)
         except (ValueError, TypeError):
             invoice_date_obj = None
+    # --- MODIFIED SECTION END ---
 
     return InvoiceData(
         invoice_number=llm_data.get("invoice_number", "N/A"),
