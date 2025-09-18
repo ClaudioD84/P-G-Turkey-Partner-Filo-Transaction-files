@@ -1,4 +1,4 @@
-# extractor/llm_client.py (Updated Version)
+# extractor/llm_client.py (Improved AI Prompt)
 
 import openai
 import json
@@ -9,39 +9,42 @@ logger = logging.getLogger(__name__)
 def extract_with_llm(text: str, api_key: str) -> dict:
     """
     Uses an LLM to extract structured data from invoice text.
-
-    Args:
-        text: The text from which to extract data.
-        api_key: The user-provided OpenAI API key.
-
-    Returns:
-        A dictionary of the extracted data.
+    The prompt is optimized to handle messy OCR output.
     """
     if not api_key:
         raise ValueError("OpenAI API key not provided. Please enter it in the sidebar.")
     
     openai.api_key = api_key
 
+    # --- NEW, MORE ROBUST PROMPT ---
     prompt = f"""
-    You are an expert invoice data extraction assistant. Analyze the following invoice text
-    and extract the specified fields. Return the result as a valid JSON object.
+    You are an expert financial data extraction assistant. The following text is from an invoice,
+    processed by Optical Character Recognition (OCR), so it may contain formatting errors or typos.
+    Your task is to analyze the text and extract the key fields as a valid JSON object.
 
-    Fields to extract:
-    - "invoice_number": The invoice identifier string.
-    - "invoice_date": The date of the invoice in YYYY-MM-DD format.
-    - "plate": The vehicle license plate number.
-    - "car_brand": The make and model of the car.
-    - "total_rent_net": The net total rental amount (before tax). This should be a number.
-    - "vat_percentage": The Value Added Tax percentage applied. This should be a number (e.g., 20 for 20%).
-    - "confidence": Your confidence in the extraction accuracy, from 0.0 to 1.0.
+    Key Instructions:
+    1.  **Invoice Number**: Look for terms like 'FATURA NO', 'Invoice No', 'ETTN', or a unique identifier.
+    2.  **Invoice Date**: Find a date, often near the invoice number. Format it as YYYY-MM-DD.
+    3.  **Plate**: Find a vehicle license plate, it will be a string with letters and numbers (e.g., '34-KVN-771').
+    4.  **Total Net Amount**: Critically important. Look for a final total before tax. Search for keywords like 'TOPLAM', 'Total', 'Net Amount', 'TUTARI'. This MUST be a number.
+    5.  **VAT Percentage**: Look for a tax rate like '20%', '10%', 'KDV'. Extract only the number.
 
-    If a field is not found, return null for its value.
+    If a field is not found or you are unsure, the value MUST be null.
 
-    --- INVOICE TEXT ---
+    --- OCR TEXT ---
     {text[:4000]}
     --- END TEXT ---
 
     JSON Output:
+    {{
+      "invoice_number": "...",
+      "invoice_date": "YYYY-MM-DD",
+      "plate": "...",
+      "car_brand": "...",
+      "total_rent_net": <number_or_null>,
+      "vat_percentage": <number_or_null>,
+      "confidence": <your_confidence_from_0.0_to_1.0>
+    }}
     """
 
     try:
@@ -49,14 +52,13 @@ def extract_with_llm(text: str, api_key: str) -> dict:
             model="gpt-3.5-turbo-1106",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=0.0, # Set to 0 for maximum fact-based extraction
         )
         content = response.choices[0].message.content
         logger.info(f"LLM Raw Response: {content}")
         return json.loads(content)
     except Exception as e:
         logger.error(f"Error during LLM call: {e}")
-        # Check for authentication errors specifically
         if "AuthenticationError" in str(type(e)):
              raise RuntimeError("Invalid OpenAI API key provided. Please check your key and try again.")
         raise RuntimeError(f"Failed to communicate with the LLM: {e}")
