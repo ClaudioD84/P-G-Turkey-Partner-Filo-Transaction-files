@@ -1,4 +1,4 @@
-# app.py (Final Version with Flexible File Matching)
+# app.py (Corrected Version)
 
 import streamlit as st
 import pandas as pd
@@ -18,7 +18,6 @@ from extractor.excel_writer import create_final_report
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- NEW, MORE ROBUST MATCHING FUNCTION ---
 def find_matching_transaction_file(pdf_filename: str, transaction_files: List[IO[bytes]]) -> Optional[IO[bytes]]:
     """
     Finds the best corresponding transaction file for a given PDF.
@@ -73,8 +72,10 @@ def main():
         4.  Process & Download.
         """)
         
-    invoice_pdfs = st.uploader("1. Upload Invoice PDFs", type="pdf", accept_multiple_files=True)
-    transaction_files = st.uploader("2. Upload Transaction Files (CSV, XLS, XLSX)", type=['csv', 'xls', 'xlsx'], accept_multiple_files=True)
+    # --- CORRECTED LINES ---
+    invoice_pdfs = st.file_uploader("1. Upload Invoice PDFs", type="pdf", accept_multiple_files=True)
+    transaction_files = st.file_uploader("2. Upload Transaction Files (CSV, XLS, XLSX)", type=['csv', 'xls', 'xlsx'], accept_multiple_files=True)
+    # --- END CORRECTION ---
 
     if st.button("Process Files", type="primary"):
         if not api_key_input: st.error("🚨 Please enter your OpenAI API key.")
