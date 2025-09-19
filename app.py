@@ -1,4 +1,4 @@
-# app.py (Final Corrected Version)
+# app.py (Final Version with Unidecode)
 
 import streamlit as st
 import pandas as pd
@@ -7,6 +7,7 @@ import os
 import logging
 import re
 from typing import List, Optional, IO
+from unidecode import unidecode
 
 # Import project modules
 from extractor.pdf_reader import read_pdf
@@ -98,12 +99,12 @@ def main():
                     text = read_pdf(pdf_path) or ocr_pdf(pdf_path)
                     if not text: raise ValueError("Could not extract text from PDF.")
 
-                    # --- NEW FIX: Sanitize text to prevent encoding errors ---
-                    cleaned_text = text.encode('ascii', 'ignore').decode('ascii')
+                    # --- NEW FIX: Use unidecode to safely convert all text to ASCII ---
+                    cleaned_text_for_ai = unidecode(text)
                     # --- END FIX ---
                     
                     log.append("Extracting summary with AI...")
-                    summary_data = extract_summary_data(cleaned_text, api_key_input) # Use cleaned_text
+                    summary_data = extract_summary_data(cleaned_text_for_ai, api_key_input)
                     log.append(f" extracted: Date={summary_data.get('invoice_date')}, VAT={summary_data.get('vat_percentage')}%")
 
                     log.append("Processing transaction details...")
