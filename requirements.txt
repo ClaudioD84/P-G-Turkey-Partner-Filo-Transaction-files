@@ -9,6 +9,7 @@ pdfplumber
 pytesseract
 Pillow
 python-dateutil
+unidecode
 
 # Streamlit UI Framework
 streamlit
