@@ -1,4 +1,4 @@
-# app.py (Final Version with Unidecode)
+# app.py (Final Version with Manual Sanitization)
 
 import streamlit as st
 import pandas as pd
@@ -7,7 +7,6 @@ import os
 import logging
 import re
 from typing import List, Optional, IO
-from unidecode import unidecode
 
 # Import project modules
 from extractor.pdf_reader import read_pdf
@@ -46,6 +45,26 @@ def find_matching_transaction_file(pdf_filename: str, transaction_files: List[IO
             return candidate
             
     return candidates[0]
+
+# --- NEW SANITIZATION FUNCTION ---
+def sanitize_text_for_api(text: str) -> str:
+    """
+    Manually replaces common non-ASCII Turkish characters with their ASCII equivalents
+    to prevent encoding errors when sending text to an API.
+    """
+    replacements = {
+        'İ': 'I', 'ı': 'i',
+        'Ş': 'S', 'ş': 's',
+        'Ğ': 'G', 'ğ': 'g',
+        'Ü': 'U', 'ü': 'u',
+        'Ö': 'O', 'ö': 'o',
+        'Ç': 'C', 'ç': 'c'
+    }
+    for non_ascii, ascii_char in replacements.items():
+        text = text.replace(non_ascii, ascii_char)
+    # As a final fallback, encode and decode, ignoring any remaining errors
+    return text.encode('ascii', 'ignore').decode('ascii')
+# --- END NEW FUNCTION ---
 
 def main():
     """Defines the Streamlit UI and orchestrates the app flow."""
@@ -99,9 +118,8 @@ def main():
                     text = read_pdf(pdf_path) or ocr_pdf(pdf_path)
                     if not text: raise ValueError("Could not extract text from PDF.")
 
-                    # --- NEW FIX: Use unidecode to safely convert all text to ASCII ---
-                    cleaned_text_for_ai = unidecode(text)
-                    # --- END FIX ---
+                    # Use the new sanitization function
+                    cleaned_text_for_ai = sanitize_text_for_api(text)
                     
                     log.append("Extracting summary with AI...")
                     summary_data = extract_summary_data(cleaned_text_for_ai, api_key_input)
