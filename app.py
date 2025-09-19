@@ -1,4 +1,4 @@
-# app.py (Corrected Version)
+# app.py (Final Corrected Version)
 
 import streamlit as st
 import pandas as pd
@@ -26,29 +26,24 @@ def find_matching_transaction_file(pdf_filename: str, transaction_files: List[IO
     """
     clean_pdf_filename = pdf_filename.strip()
     
-    # Primary strategy: Find number in parentheses, e.g., (153351)
     primary_match = re.search(r'\((\d+)\)', clean_pdf_filename)
     if primary_match:
         search_key = primary_match.group(1)
     else:
-        # Fallback strategy: Find the PFS number
         fallback_match = re.search(r'(PFS\d+)', clean_pdf_filename)
         if not fallback_match:
             return None
         search_key = fallback_match.group(1)
         
-    # Find all possible candidate files that contain the search key
-    candidates = [file for file in transaction_files if search_key in file.name.strip()]
+    candidates = [file for file in transaction_files if file.name and search_key in file.name.strip()]
             
     if not candidates:
         return None
         
-    # Prioritize the file with "INVOICE DETAILS" in the name
     for candidate in candidates:
         if "INVOICE DETAILS" in candidate.name.upper():
             return candidate
             
-    # If no specific match, return the first candidate found
     return candidates[0]
 
 def main():
@@ -57,7 +52,6 @@ def main():
     st.title("🧾 Invoice and Transaction Processor")
     st.markdown("Upload invoice PDFs and their corresponding transaction files. The tool will combine them into a final report.")
 
-    # Initialize session state
     if 'output_files' not in st.session_state: st.session_state.output_files = {}
     if 'processing_log' not in st.session_state: st.session_state.processing_log = []
 
@@ -72,10 +66,8 @@ def main():
         4.  Process & Download.
         """)
         
-    # --- CORRECTED LINES ---
     invoice_pdfs = st.file_uploader("1. Upload Invoice PDFs", type="pdf", accept_multiple_files=True)
     transaction_files = st.file_uploader("2. Upload Transaction Files (CSV, XLS, XLSX)", type=['csv', 'xls', 'xlsx'], accept_multiple_files=True)
-    # --- END CORRECTION ---
 
     if st.button("Process Files", type="primary"):
         if not api_key_input: st.error("🚨 Please enter your OpenAI API key.")
@@ -105,13 +97,17 @@ def main():
                     log.append("Reading PDF...")
                     text = read_pdf(pdf_path) or ocr_pdf(pdf_path)
                     if not text: raise ValueError("Could not extract text from PDF.")
+
+                    # --- NEW FIX: Sanitize text to prevent encoding errors ---
+                    cleaned_text = text.encode('ascii', 'ignore').decode('ascii')
+                    # --- END FIX ---
                     
                     log.append("Extracting summary with AI...")
-                    summary_data = extract_summary_data(text, api_key_input)
+                    summary_data = extract_summary_data(cleaned_text, api_key_input) # Use cleaned_text
                     log.append(f" extracted: Date={summary_data.get('invoice_date')}, VAT={summary_data.get('vat_percentage')}%")
 
                     log.append("Processing transaction details...")
-                    final_df = process_transactions(matching_tran_file, summary_data, text)
+                    final_df = process_transactions(matching_tran_file, summary_data, text) # Use original text for business logic
                     
                     output_filename = f"Final_Report_{os.path.splitext(pdf_name)[0]}.xlsx"
                     excel_bytes = create_final_report(final_df)
